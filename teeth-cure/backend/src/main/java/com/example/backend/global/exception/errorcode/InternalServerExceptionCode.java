@@ -14,6 +14,6 @@ public enum InternalServerExceptionCode implements ExceptionCode {
     ;
 
     private final HttpStatus httpStatus;
-    private final String errorCode;
-    private final String errorMessage;
+    private final String exceptionCode;
+    private final String exceptionMessage;
 }
