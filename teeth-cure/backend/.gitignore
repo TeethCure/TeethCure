@@ -38,3 +38,5 @@ out/
 
 # docker-compose-local
 docker-compose-local.yaml
+# application-local.yaml
+application-local.yaml
