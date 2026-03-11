@@ -18,6 +18,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -55,13 +57,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -128,7 +128,19 @@ private fun WorldMapScreen(
     uiState: AppUiState,
     onStartBrushing: () -> Unit,
 ) {
-    val mapBitmap = rememberAssetBitmap(GameCatalog.WORLD_MAP_ASSET)
+    val backgroundBitmap = rememberAssetBitmap("world_map/WorldBackground.png")
+    val toothBitmap = rememberAssetBitmap("world_map/tooth.png")
+    val regionBitmaps = GameCatalog.regions.map { region ->
+        region to rememberAssetBitmap(region.assetPath)
+    }
+    val worldPlacements = listOf(
+        WorldPlacement(regionIndex = 0, widthFraction = 0.36f, xFraction = 0.08f, yFraction = 0.64f),
+        // WorldPlacement(regionIndex = 1, widthFraction = 0.36f, xFraction = 0.02f, yFraction = 0.31f),
+        WorldPlacement(regionIndex = 1, widthFraction = 0.39f, xFraction = 0.03f, yFraction = 0.30f),
+        WorldPlacement(regionIndex = 2, widthFraction = 0.42f, xFraction = 0.28f, yFraction = 0.05f),
+        WorldPlacement(regionIndex = 3, widthFraction = 0.39f, xFraction = 0.56f, yFraction = 0.30f),
+        WorldPlacement(regionIndex = 4, widthFraction = 0.40f, xFraction = 0.56f, yFraction = 0.60f),
+    )
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -140,7 +152,7 @@ private fun WorldMapScreen(
             fontWeight = FontWeight.Bold,
         )
         Text(
-            text = "Rescued character zones are revealed in color.",
+            text = "Regions stay grayscale until every character in that region is unlocked.",
             style = MaterialTheme.typography.bodyMedium,
             color = Color(0xFF3E5E7A),
         )
@@ -154,42 +166,47 @@ private fun WorldMapScreen(
                 .border(2.dp, Color(0xFFB8D3EB), RoundedCornerShape(16.dp))
                 .background(Color.White),
         ) {
-            if (mapBitmap == null) {
+            if (backgroundBitmap == null || toothBitmap == null || regionBitmaps.any { (_, bitmap) -> bitmap == null }) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("Loading map...")
                 }
             } else {
-                Canvas(modifier = Modifier.fillMaxSize()) {
+                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                     val grayMatrix = ColorMatrix().apply { setToSaturation(0f) }
-                    drawImage(
-                        image = mapBitmap,
-                        dstSize = androidx.compose.ui.unit.IntSize(size.width.toInt(), size.height.toInt()),
-                        colorFilter = ColorFilter.colorMatrix(grayMatrix),
+
+                    Image(
+                        bitmap = backgroundBitmap,
+                        contentDescription = "World background",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
                     )
 
-                    val revealRadius = size.minDimension * 0.08f
-                    GameCatalog.characters
-                        .filter { it.id in uiState.unlockedCharacterIds }
-                        .forEach { character ->
-                            val cx = character.mapX * size.width
-                            val cy = character.mapY * size.height
-                            val clip = Path().apply {
-                                addOval(
-                                    Rect(
-                                        left = cx - revealRadius,
-                                        top = cy - revealRadius,
-                                        right = cx + revealRadius,
-                                        bottom = cy + revealRadius,
-                                    ),
-                                )
-                            }
-                            clipPath(clip) {
-                                drawImage(
-                                    image = mapBitmap,
-                                    dstSize = androidx.compose.ui.unit.IntSize(size.width.toInt(), size.height.toInt()),
-                                )
-                            }
-                        }
+                    worldPlacements.forEach { placement ->
+                        val region = GameCatalog.regions[placement.regionIndex]
+                        val bitmap = regionBitmaps[placement.regionIndex].second!!
+                        val isRegionUnlocked = GameCatalog.charactersInRegion(region.id)
+                            .all { it.id in uiState.unlockedCharacterIds }
+
+                        Image(
+                            bitmap = bitmap,
+                            contentDescription = region.name,
+                            modifier = Modifier
+                                .fillMaxWidth(placement.widthFraction)
+                                .offset(
+                                    x = maxWidth * placement.xFraction,
+                                    y = maxHeight * placement.yFraction,
+                                ),
+                            colorFilter = if (isRegionUnlocked) null else ColorFilter.colorMatrix(grayMatrix),
+                        )
+                    }
+
+                    Image(
+                        bitmap = toothBitmap,
+                        contentDescription = "Center tooth",
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .fillMaxWidth(0.11f),
+                    )
                 }
             }
         }
@@ -205,6 +222,13 @@ private fun WorldMapScreen(
         }
     }
 }
+
+private data class WorldPlacement(
+    val regionIndex: Int,
+    val widthFraction: Float,
+    val xFraction: Float,
+    val yFraction: Float,
+)
 
 @Composable
 private fun BrushingScreen(
