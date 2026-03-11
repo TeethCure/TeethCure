@@ -184,7 +184,8 @@ private fun WorldMapScreen(
                     worldPlacements.forEach { placement ->
                         val region = GameCatalog.regions[placement.regionIndex]
                         val bitmap = regionBitmaps[placement.regionIndex].second!!
-                        val isRegionUnlocked = region.characterIds.all { it in uiState.unlockedCharacterIds }
+                        val isRegionUnlocked = GameCatalog.charactersInRegion(region.id)
+                            .all { it.id in uiState.unlockedCharacterIds }
 
                         Image(
                             bitmap = bitmap,
