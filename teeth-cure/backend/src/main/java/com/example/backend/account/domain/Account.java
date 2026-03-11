@@ -23,7 +23,7 @@ public class Account extends SoftDeletedDomain {
     @Column(name = "accounts_id")
     private Long id;
 
-    @Column(name = "users_id", nullable = false)
+    @Column(name = "users_id", nullable = false, unique = true)
     private String userId;
 
     @Embedded
