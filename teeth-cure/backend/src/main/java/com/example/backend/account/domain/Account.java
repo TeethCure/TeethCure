@@ -33,4 +33,11 @@ public class Account extends SoftDeletedDomain {
         this.userId = userId;
         this.password = Password.hashPassword(password);
     }
+
+    public void login(String plainTextPassword) {
+        boolean same = this.password.match(plainTextPassword);
+        if (!same) {
+//            throw new GlobalException();
+        }
+    }
 }

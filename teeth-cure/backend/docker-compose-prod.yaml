@@ -19,7 +19,7 @@ services:
         condition: service_healthy
     networks:
       - app-network
-
+  
   # 2. MySQL (데이터베이스)
   mysql-db:
     image: mysql:8.0
