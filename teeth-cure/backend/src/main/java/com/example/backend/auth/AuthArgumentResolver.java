@@ -32,13 +32,13 @@ public class AuthArgumentResolver implements HandlerMethodArgumentResolver {
     ) {
         HttpServletRequest request = (HttpServletRequest) webRequest.getNativeRequest();
         String token = extractToken(request);
-        return tokenService.extractUserId(token);
+        return tokenService.extractAccountId(token);
     }
 
     private String extractToken(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
         if (bearerToken == null) {
-            throw new GlobalException(TokenErrorCode.REQUIRED_BEARER_TOKEN);
+            throw new GlobalException(TokenExceptionCode.REQUIRED_BEARER_TOKEN);
         }
         return bearerTokenExtractor.extract(bearerToken);
     }

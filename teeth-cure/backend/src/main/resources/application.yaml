@@ -4,3 +4,7 @@ spring:
 
   profiles:
     active: local
+
+token:
+  access-token-expiration-millis: 15552000000
+  secret-key: c2lsdmVyLXN0YXJkdXN0LXNwcmluZy1ib290LWp3dC10dXRvcmlhbC1zZWNyZXQtZ2VuZXJhdGVkLWJ5LXNlb3llb24

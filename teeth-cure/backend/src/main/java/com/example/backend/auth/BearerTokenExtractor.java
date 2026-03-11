@@ -19,6 +19,6 @@ public class BearerTokenExtractor {
             log.info("Bearer Token 추출 완료");
             return token;
         }
-        throw new GlobalException(TokenErrorCode.REQUIRED_BEARER_TOKEN);
+        throw new GlobalException(TokenExceptionCode.REQUIRED_BEARER_TOKEN);
     }
 }

@@ -3,6 +3,10 @@ package com.example.backend.account.presentation;
 import com.example.backend.account.application.AccountService;
 import com.example.backend.account.presentation.dto.AccountSignupRequest;
 import com.example.backend.account.presentation.dto.AccountSignupResponse;
+import com.example.backend.account.presentation.dto.LoginRequest;
+import com.example.backend.account.presentation.dto.LoginResponse;
+import com.example.backend.auth.Token;
+import com.example.backend.auth.TokenService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -18,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 public class AccountController {
 
     private final AccountService accountService;
+    private final TokenService tokenService;
 
     @PostMapping("/signup")
     public ResponseEntity<AccountSignupResponse> registerAccount(
@@ -25,5 +30,14 @@ public class AccountController {
     ) {
         Long accountId = accountService.registerAccount(request.userId(), request.password());
         return ResponseEntity.status(HttpStatus.CREATED).body(new AccountSignupResponse(accountId));
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<LoginResponse> login(
+            @RequestBody LoginRequest request
+    ) {
+        Long id = accountService.login(request.userId(), request.password());
+        Token token = tokenService.createToken(id);
+        return ResponseEntity.ok(new LoginResponse(id, token.accessToken()));
     }
 }

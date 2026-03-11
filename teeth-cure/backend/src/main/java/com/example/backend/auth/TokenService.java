@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class TokenService {
 
-    private static final String USER_ID_CLAIM = "userId";
+    private static final String ACCOUNT_ID_CLAIM = "memberId";
 
     private final SecretKey secretKey;
     private final long accessTokenExpirationMillis;
@@ -23,34 +23,31 @@ public class TokenService {
         this.accessTokenExpirationMillis = tokenProperty.accessTokenExpirationMillis();
     }
 
-    public Token issueTokens(Long userId) {
-        String accessToken = createAccessToken(userId);
+    public Token createToken(Long accountId) {
+        String accessToken = Jwts.builder()
+                .claim(ACCOUNT_ID_CLAIM, accountId)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + accessTokenExpirationMillis))
+                .signWith(secretKey, Jwts.SIG.HS512)
+                .compact();
+
         return new Token(accessToken);
     }
 
-    public Long extractUserId(String token) {
+    public Long extractAccountId(String token) {
         try {
             return Jwts.parser()
                     .verifyWith(secretKey)
                     .build()
                     .parseSignedClaims(token)
                     .getPayload()
-                    .get(USER_ID_CLAIM, Long.class);
+                    .get(ACCOUNT_ID_CLAIM, Long.class);
         } catch (ExpiredJwtException e) {
-            throw new GlobalException(TokenErrorCode.EXPIRED_TOKEN);
+            throw new GlobalException(TokenExceptionCode.EXPIRED_TOKEN);
         } catch (MalformedJwtException e) {
-            throw new GlobalException(TokenErrorCode.INVALID_TOKEN);
+            throw new GlobalException(TokenExceptionCode.INVALID_TOKEN);
         } catch (Exception e) {
-            throw new GlobalException(TokenErrorCode.UNKNOWN_TOKEN);
+            throw new GlobalException(TokenExceptionCode.UNKNOWN_TOKEN);
         }
-    }
-
-    private String createAccessToken(Long userId) {
-        return Jwts.builder()
-                .claim(USER_ID_CLAIM, userId)
-                .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + accessTokenExpirationMillis))
-                .signWith(secretKey, Jwts.SIG.HS256)
-                .compact();
     }
 }
