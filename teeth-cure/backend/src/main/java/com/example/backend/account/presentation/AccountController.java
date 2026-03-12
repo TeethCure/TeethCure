@@ -34,7 +34,7 @@ public class AccountController {
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(
-            @RequestBody LoginRequest request
+            @RequestBody @Valid LoginRequest request
     ) {
         Long id = accountService.login(request.userId(), request.password());
         Token token = tokenService.createToken(id);

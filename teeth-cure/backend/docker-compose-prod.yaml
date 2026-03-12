@@ -12,6 +12,8 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:mysql://teeth-cure-db:3306/${DB_NAME}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
       - SPRING_DATASOURCE_USERNAME=${DB_USER}
       - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
+      - access-token-expiration-millis=${EXPIRATION_MILLIS}
+      - secret-key=${SECRET_KEY}
     volumes:
       - ./logs:/app/logs
     depends_on:
