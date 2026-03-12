@@ -17,6 +17,6 @@ public enum AccountExceptionCode implements ExceptionCode {
     ;
 
     private final HttpStatus httpStatus;
-    private final String exceptionMessage;
     private final String exceptionCode;
+    private final String exceptionMessage;
 }

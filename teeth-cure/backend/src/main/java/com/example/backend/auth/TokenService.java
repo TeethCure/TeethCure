@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class TokenService {
 
-    private static final String ACCOUNT_ID_CLAIM = "memberId";
+    private static final String ACCOUNT_ID_CLAIM = "accountId";
 
     private final SecretKey secretKey;
     private final long accessTokenExpirationMillis;
