@@ -1,7 +1,7 @@
 package com.example.backend.account.domain;
 
 import com.example.backend.global.exception.GlobalException;
-import com.example.backend.global.exception.errorcode.UserExceptionCode;
+import com.example.backend.global.exception.errorcode.AccountExceptionCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import java.nio.charset.StandardCharsets;
@@ -43,7 +43,7 @@ public class Password {
             return hexStr.toString();
 
         } catch (NoSuchAlgorithmException e) {
-            throw new GlobalException(UserExceptionCode.INVALID_PASSWORD_ALGORITHM);
+            throw new GlobalException(AccountExceptionCode.INVALID_PASSWORD_ALGORITHM);
         }
     }
 
