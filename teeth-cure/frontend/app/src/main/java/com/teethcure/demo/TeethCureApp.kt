@@ -1,5 +1,7 @@
 package com.teethcure.demo
 
+import android.graphics.Bitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -72,6 +74,35 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.util.Locale
 import java.util.concurrent.Executors
 import kotlinx.coroutines.delay
+
+private fun imageProxyToBitmap(imageProxy: ImageProxy): Bitmap? {
+    val width = imageProxy.width
+    val height = imageProxy.height
+    if (imageProxy.planes.isEmpty() || width <= 0 || height <= 0) return null
+    val plane = imageProxy.planes[0]
+    val buffer = plane.buffer
+    val rowStride = plane.rowStride
+    val pixelStride = plane.pixelStride
+    if (pixelStride <= 0 || rowStride <= 0) return null
+
+    val pixels = IntArray(width * height)
+    buffer.rewind()
+
+    for (y in 0 until height) {
+        val rowStart = y * rowStride
+        for (x in 0 until width) {
+            val i = rowStart + x * pixelStride
+            if (i + 3 >= buffer.limit()) continue
+            val r = buffer.get(i).toInt() and 0xFF
+            val g = buffer.get(i + 1).toInt() and 0xFF
+            val b = buffer.get(i + 2).toInt() and 0xFF
+            val a = buffer.get(i + 3).toInt() and 0xFF
+            pixels[y * width + x] = (a shl 24) or (r shl 16) or (g shl 8) or b
+        }
+    }
+
+    return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
+}
 
 @Composable
 fun TeethCureApp(viewModel: TeethCureViewModel) {
@@ -244,6 +275,8 @@ private fun BrushingScreen(
     val context = LocalContext.current
 
     val tracker = remember(context) { MediaPipeHandMouthTracker(context) }
+    var faceOverlay by remember { mutableStateOf(FaceOverlayState()) }
+    val faceTracker = remember(context) { MediaPipeFaceTracker(context) }
 
     DisposableEffect(brushing.active, tracker) {
         if (brushing.active) {
@@ -252,13 +285,21 @@ private fun BrushingScreen(
                 onSkeletonDetected = { frame -> debugSkeleton = frame },
                 onStatusChanged = { status -> trackerStatus = status },
             )
+            faceTracker.start(
+                onFaceDetected = { state -> faceOverlay = state },
+                onStatusChanged = { status -> trackerStatus = status },
+            )
         } else {
             tracker.stop()
             debugSkeleton = SkeletonFrame.Empty
+            faceTracker.stop()
+            faceOverlay = FaceOverlayState()
         }
         onDispose {
             tracker.stop()
             debugSkeleton = SkeletonFrame.Empty
+            faceTracker.stop()
+            faceOverlay = FaceOverlayState()
         }
     }
 
@@ -350,13 +391,37 @@ private fun BrushingScreen(
                 CameraPreview(
                     modifier = Modifier.fillMaxSize(),
                     onFrame = { imageProxy ->
+                        val bitmap = imageProxyToBitmap(imageProxy) ?: return@CameraPreview
+                        val timestampMs = imageProxy.imageInfo.timestamp / 1_000_000L
+                        faceTracker.processBitmap(bitmap, timestampMs, isFrontCamera = true)
+
                         tracker.processFrame(imageProxy, isFrontCamera = true)
-                    },
+                    }
                 )
                 SkeletonOverlay(
                     frame = debugSkeleton,
                     modifier = Modifier.fillMaxSize(),
                 )
+                val filterBitmap = rememberAssetBitmap("characters_filter/AquaFilter.png")
+                if (filterBitmap != null && faceOverlay.isDetected) {
+                    BoxWithConstraints(Modifier.fillMaxSize()) {
+                        val aspect = filterBitmap.width.toFloat() / filterBitmap.height.toFloat()
+                        val scale = 1.8f
+                        val filterWidth = maxWidth * (faceOverlay.faceWidth * scale)
+                        val filterHeight = filterWidth / aspect
+                        val offsetX = maxWidth * faceOverlay.centerX - filterWidth / 2f
+                        val offsetY = maxHeight * faceOverlay.centerY - filterHeight / 2f
+
+                        Image(
+                            bitmap = filterBitmap,
+                            contentDescription = "Face filter",
+                            modifier = Modifier
+                                .offset(x = offsetX, y = offsetY)
+                                .size(width = filterWidth, height = filterHeight)
+                                .graphicsLayer { rotationZ = faceOverlay.rotation },
+                        )
+                    }
+                }
             } else {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("Camera permission required.", color = Color.White)
