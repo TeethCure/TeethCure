@@ -4,3 +4,7 @@ spring:
 
   profiles:
     active: local
+
+token:
+  access-token-expiration-millis: ${EXPIRATION_MILLIS}
+  secret-key: ${SECRET_KEY}

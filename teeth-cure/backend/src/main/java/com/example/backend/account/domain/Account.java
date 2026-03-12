@@ -1,6 +1,8 @@
 package com.example.backend.account.domain;
 
 import com.example.backend.global.domain.SoftDeletedDomain;
+import com.example.backend.global.exception.GlobalException;
+import com.example.backend.global.exception.errorcode.AccountExceptionCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
@@ -34,4 +36,10 @@ public class Account extends SoftDeletedDomain {
         this.password = Password.hashPassword(password);
     }
 
+    public void login(String plainTextPassword) {
+        boolean same = this.password.match(plainTextPassword);
+        if (!same) {
+            throw new GlobalException(AccountExceptionCode.INVALID_USERNAME_PASSWORD);
+        }
+    }
 }
