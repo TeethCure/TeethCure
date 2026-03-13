@@ -1,6 +1,5 @@
 package com.teethcure.demo
 
-import android.graphics.Bitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import android.Manifest
 import android.content.pm.PackageManager
@@ -74,35 +73,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.util.Locale
 import java.util.concurrent.Executors
 import kotlinx.coroutines.delay
-
-private fun imageProxyToBitmap(imageProxy: ImageProxy): Bitmap? {
-    val width = imageProxy.width
-    val height = imageProxy.height
-    if (imageProxy.planes.isEmpty() || width <= 0 || height <= 0) return null
-    val plane = imageProxy.planes[0]
-    val buffer = plane.buffer
-    val rowStride = plane.rowStride
-    val pixelStride = plane.pixelStride
-    if (pixelStride <= 0 || rowStride <= 0) return null
-
-    val pixels = IntArray(width * height)
-    buffer.rewind()
-
-    for (y in 0 until height) {
-        val rowStart = y * rowStride
-        for (x in 0 until width) {
-            val i = rowStart + x * pixelStride
-            if (i + 3 >= buffer.limit()) continue
-            val r = buffer.get(i).toInt() and 0xFF
-            val g = buffer.get(i + 1).toInt() and 0xFF
-            val b = buffer.get(i + 2).toInt() and 0xFF
-            val a = buffer.get(i + 3).toInt() and 0xFF
-            pixels[y * width + x] = (a shl 24) or (r shl 16) or (g shl 8) or b
-        }
-    }
-
-    return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
-}
 
 @Composable
 fun TeethCureApp(viewModel: TeethCureViewModel) {
@@ -285,6 +255,7 @@ private fun BrushingScreen(
                 onSkeletonDetected = { frame -> debugSkeleton = frame },
                 onStatusChanged = { status -> trackerStatus = status },
             )
+            // MediaPipe FaceLandmarker를 초기화하고, 얼굴 좌표를 받을 콜백 등록
             faceTracker.start(
                 onFaceDetected = { state -> faceOverlay = state },
                 onStatusChanged = { status -> trackerStatus = status },
@@ -391,37 +362,54 @@ private fun BrushingScreen(
                 CameraPreview(
                     modifier = Modifier.fillMaxSize(),
                     onFrame = { imageProxy ->
-                        val bitmap = imageProxyToBitmap(imageProxy) ?: return@CameraPreview
-                        val timestampMs = imageProxy.imageInfo.timestamp / 1_000_000L
-                        faceTracker.processBitmap(bitmap, timestampMs, isFrontCamera = true)
-
-                        tracker.processFrame(imageProxy, isFrontCamera = true)
+                        try {
+                            tracker.processFrame(imageProxy, isFrontCamera = true)
+                            faceTracker.processFrame(imageProxy, isFrontCamera = true)
+                        } finally {
+                            imageProxy.close()
+                        }
                     }
                 )
                 SkeletonOverlay(
                     frame = debugSkeleton,
                     modifier = Modifier.fillMaxSize(),
                 )
+
+                // 디버그 코드
+                Text(
+                    text = "face: ${faceOverlay.isDetected} x=${faceOverlay.centerX} y=${faceOverlay.centerY} w=${faceOverlay.faceWidth} r=${faceOverlay.rotation}",
+                    color = Color.White
+                )
+
                 val filterBitmap = rememberAssetBitmap("characters_filter/AquaFilter.png")
                 if (filterBitmap != null && faceOverlay.isDetected) {
                     BoxWithConstraints(Modifier.fillMaxSize()) {
                         val aspect = filterBitmap.width.toFloat() / filterBitmap.height.toFloat()
+
+                        // 얼굴 크기 대비 필터 배율
                         val scale = 1.8f
                         val filterWidth = maxWidth * (faceOverlay.faceWidth * scale)
                         val filterHeight = filterWidth / aspect
-                        val offsetX = maxWidth * faceOverlay.centerX - filterWidth / 2f
-                        val offsetY = maxHeight * faceOverlay.centerY - filterHeight / 2f
 
                         Image(
                             bitmap = filterBitmap,
                             contentDescription = "Face filter",
                             modifier = Modifier
-                                .offset(x = offsetX, y = offsetY)
                                 .size(width = filterWidth, height = filterHeight)
-                                .graphicsLayer { rotationZ = faceOverlay.rotation },
+                                .graphicsLayer {
+                                    // 트래커에서 보정된 centerX, centerY 사용
+                                    translationX = (maxWidth.toPx() * faceOverlay.centerX) - (size.width / 2f)
+                                    translationY = (maxHeight.toPx() * faceOverlay.centerY) - size.height + (size.height * 0.1f)
+
+                                    // 트래커에서 이미 90도 보정을 마쳤으므로 그대로 대입
+                                    rotationZ = faceOverlay.rotation
+                                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
+                                },
+                            contentScale = ContentScale.FillBounds
                         )
                     }
                 }
+
             } else {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("Camera permission required.", color = Color.White)
@@ -579,6 +567,7 @@ private fun CameraPreview(
 
                     val analysis = ImageAnalysis.Builder()
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                        .setTargetResolution(android.util.Size(480, 640)) // 해상도를 낮춤으로써 속도 개선
                         .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                         .build()
                     analysis.setAnalyzer(analyzerExecutor) { imageProxy ->

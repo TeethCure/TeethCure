@@ -70,7 +70,6 @@ class MediaPipeHandMouthTracker(
     @OptIn(ExperimentalGetImage::class)
     override fun processFrame(imageProxy: ImageProxy, isFrontCamera: Boolean) {
         if (!started || handLandmarker == null || faceLandmarker == null) {
-            imageProxy.close()
             return
         }
 
@@ -138,8 +137,6 @@ class MediaPipeHandMouthTracker(
         } catch (t: Throwable) {
             val reason = t.message?.take(100) ?: t::class.java.simpleName
             onStatusChanged("MediaPipe frame error: $reason")
-        } finally {
-            imageProxy.close()
         }
     }
 
