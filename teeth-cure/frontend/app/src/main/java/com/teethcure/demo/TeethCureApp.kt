@@ -38,6 +38,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -89,7 +90,7 @@ fun TeethCureApp(viewModel: TeethCureViewModel) {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
-            if (uiState.selectedTab != AppTab.Brushing) {
+            if (!uiState.needsProfileSelection && uiState.selectedTab != AppTab.Brushing) {
                 NavigationBar {
                     AppTab.entries
                         .filter { it != AppTab.Brushing }
@@ -111,14 +112,148 @@ fun TeethCureApp(viewModel: TeethCureViewModel) {
                 .padding(innerPadding)
                 .background(Color(0xFFEAF4FF)),
         ) {
-            when (uiState.selectedTab) {
-                AppTab.WorldMap -> WorldMapScreen(
+            if (uiState.needsProfileSelection) {
+                ProfileSelectionScreen(
                     uiState = uiState,
-                    onStartBrushing = viewModel::startSession,
+                    onRetry = viewModel::loadProfiles,
+                    onSelectProfile = viewModel::selectProfile,
                 )
+            } else {
+                when (uiState.selectedTab) {
+                    AppTab.WorldMap -> WorldMapScreen(
+                        uiState = uiState,
+                        onStartBrushing = viewModel::startSession,
+                        onChangeProfile = viewModel::resetSelectedProfile,
+                    )
 
-                AppTab.Brushing -> BrushingScreen(viewModel = viewModel, uiState = uiState)
-                AppTab.Collection -> CollectionScreen(uiState = uiState)
+                    AppTab.Brushing -> BrushingScreen(viewModel = viewModel, uiState = uiState)
+                    AppTab.Collection -> CollectionScreen(uiState = uiState)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileSelectionScreen(
+    uiState: AppUiState,
+    onRetry: () -> Unit,
+    onSelectProfile: (ProfileSummary) -> Unit,
+) {
+    val profileState = uiState.profileSelection
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text(
+            text = "프로필 선택",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            text = "계정당 최대 3개의 프로필을 가질 수 있어요. 사용할 프로필을 선택해 주세요.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = Color(0xFF486277),
+        )
+
+        when {
+            profileState.isLoading -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+
+            profileState.errorMessage != null -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(
+                            text = profileState.errorMessage,
+                            textAlign = TextAlign.Center,
+                            color = Color(0xFF8B1E3F),
+                        )
+                        Button(onClick = onRetry) {
+                            Text("다시 불러오기")
+                        }
+                    }
+                }
+            }
+
+            else -> {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    profileState.profiles.forEach { profile ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelectProfile(profile) },
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 18.dp, vertical = 20.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text(
+                                    text = profile.name,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(
+                                    text = profile.birthDate?.let { "생년월일 $it" } ?: "생년월일 정보 없음",
+                                    color = Color(0xFF5C7286),
+                                )
+                                Text(
+                                    text = "탭해서 이 프로필로 시작",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFF3E5E7A),
+                                )
+                            }
+                        }
+                    }
+
+                    repeat(ProfileSelectionState.MAX_PROFILE_COUNT - profileState.profiles.size) { index ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(1.dp, Color(0xFFC9DCEC), RoundedCornerShape(12.dp)),
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 18.dp, vertical = 20.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text(
+                                    text = "빈 프로필 슬롯 ${profileState.profiles.size + index + 1}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    text = "프로필 생성 기능이 연결되면 이 자리에서 바로 추가할 수 있어요.",
+                                    color = Color(0xFF5C7286),
+                                )
+                            }
+                        }
+                    }
+
+                    if (!profileState.canCreateMore) {
+                        Text(
+                            text = "프로필은 최대 3개까지 생성할 수 있습니다.",
+                            color = Color(0xFF3E5E7A),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
             }
         }
     }
@@ -128,6 +263,7 @@ fun TeethCureApp(viewModel: TeethCureViewModel) {
 private fun WorldMapScreen(
     uiState: AppUiState,
     onStartBrushing: () -> Unit,
+    onChangeProfile: () -> Unit,
 ) {
     val backgroundBitmap = rememberAssetBitmap("world_map/WorldBackground.png")
     val toothBitmap = rememberAssetBitmap("world_map/tooth.png")
@@ -147,6 +283,28 @@ private fun WorldMapScreen(
             .fillMaxSize()
             .padding(12.dp),
     ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column {
+                Text(
+                    text = uiState.selectedProfile?.name ?: "",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = "현재 선택된 프로필",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF486277),
+                )
+            }
+            Button(onClick = onChangeProfile) {
+                Text("프로필 변경")
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = "TeethKeeth Kingdom",
             style = MaterialTheme.typography.headlineSmall,

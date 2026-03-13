@@ -1,10 +1,13 @@
 package com.teethcure.demo
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 enum class MouthZone { LEFT, CENTER, RIGHT }
 
@@ -30,18 +33,84 @@ data class BrushingState(
     val complete: Boolean get() = purification == 3
 }
 
+data class ProfileSelectionState(
+    val isLoading: Boolean = true,
+    val profiles: List<ProfileSummary> = emptyList(),
+    val errorMessage: String? = null,
+) {
+    val canCreateMore: Boolean get() = profiles.size < MAX_PROFILE_COUNT
+
+    companion object {
+        const val MAX_PROFILE_COUNT = 3
+    }
+}
+
 data class AppUiState(
     val selectedTab: AppTab = AppTab.WorldMap,
     val unlockedCharacterIds: Set<String> = emptySet(),
     val brushing: BrushingState = BrushingState(targetCharacterId = GameCatalog.characters.first().id),
+    val profileSelection: ProfileSelectionState = ProfileSelectionState(),
+    val selectedProfile: ProfileSummary? = null,
 ) {
     val targetCharacter: CharacterInfo =
         GameCatalog.characters.first { it.id == brushing.targetCharacterId }
+
+    val needsProfileSelection: Boolean
+        get() = selectedProfile == null
 }
 
-class TeethCureViewModel : ViewModel() {
+class TeethCureViewModel(
+    private val profileRepository: ProfileRepository = ProfileRepository(),
+) : ViewModel() {
     private val _uiState = MutableStateFlow(AppUiState())
     val uiState: StateFlow<AppUiState> = _uiState.asStateFlow()
+
+    init {
+        loadProfiles()
+    }
+
+    fun loadProfiles() {
+        _uiState.update {
+            it.copy(
+                profileSelection = it.profileSelection.copy(
+                    isLoading = true,
+                    errorMessage = null,
+                ),
+            )
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { profileRepository.fetchProfiles() }
+                .onSuccess { profiles ->
+                    _uiState.update {
+                        it.copy(
+                            profileSelection = ProfileSelectionState(
+                                isLoading = false,
+                                profiles = profiles.take(ProfileSelectionState.MAX_PROFILE_COUNT),
+                            ),
+                        )
+                    }
+                }
+                .onFailure { throwable ->
+                    _uiState.update {
+                        it.copy(
+                            profileSelection = it.profileSelection.copy(
+                                isLoading = false,
+                                errorMessage = throwable.message ?: "프로필 목록을 불러오지 못했습니다.",
+                            ),
+                        )
+                    }
+                }
+        }
+    }
+
+    fun selectProfile(profile: ProfileSummary) {
+        _uiState.update { it.copy(selectedProfile = profile) }
+    }
+
+    fun resetSelectedProfile() {
+        _uiState.update { it.copy(selectedProfile = null) }
+    }
 
     fun selectTab(tab: AppTab) {
         _uiState.update { it.copy(selectedTab = tab) }
@@ -49,6 +118,8 @@ class TeethCureViewModel : ViewModel() {
 
     fun startSession() {
         _uiState.update { state ->
+            if (state.selectedProfile == null) return@update state
+
             state.copy(
                 selectedTab = AppTab.Brushing,
                 brushing = BrushingState(
@@ -106,7 +177,7 @@ class TeethCureViewModel : ViewModel() {
             unlockedCharacterIds = unlocked,
             brushing = brushing.copy(
                 active = false,
-                resultMessage = "구출 성공! 정화도 ${brushing.purification}/3",
+                resultMessage = "정화 성공! 완료 단계 ${brushing.purification}/3",
                 targetCharacterId = nextTarget,
             ),
         )
@@ -117,7 +188,7 @@ class TeethCureViewModel : ViewModel() {
             selectedTab = AppTab.WorldMap,
             brushing = brushing.copy(
                 active = false,
-                resultMessage = "구출 실패. 다음에 다시 도전해요!",
+                resultMessage = "정화 실패. 제한 시간 안에 다시 도전해 보세요.",
             ),
         )
     }
