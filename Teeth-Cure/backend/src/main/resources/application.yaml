@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: backend
+
+  profiles:
+    active: local
+
+token:
+  access-token-expiration-millis: ${EXPIRATION_MILLIS}
+  secret-key: ${SECRET_KEY}
